@@ -9,11 +9,7 @@ switch expType
             return
         end
         
-        if size(nlg_TTL_timestamps,2) == 1
-            nlg_TTL_timestamps = nlg_TTL_timestamps';
-            nlg_TTL_durations = nlg_TTL_durations';
-        end
-        
+        lfpData_data_name = 'lfpData';
         fs = lfpData.fs;
         timestamps = lfpData.timestamps;
         
@@ -43,7 +39,7 @@ notch_filter_120Hz=designfilt('bandstopiir','FilterOrder',2,'HalfPowerFrequency1
 filters = {notch_filter_60Hz,notch_filter_120Hz};
 %%
 
-n_channel = length(lfpData.active_channels);
+n_channel = size(lfpData.(lfpData_data_name),1);
 
 lfp_playback_offset_csc_samples = round(lfp_playback_offset*fs);
 n_lfp_samples = 2*lfp_playback_offset_csc_samples + 1;
@@ -52,28 +48,33 @@ used_playback_idx = [Inf diff(nlg_TTL_timestamps)] > 1e3*lfp_playback_offset & (
 nlg_TTL_timestamps = nlg_TTL_timestamps(used_playback_idx);
 n_used_playbacks = sum(used_playback_idx);
 
-playback_csc = zeros(n_lfp_samples,n_used_playbacks,n_channel);
-tic;
+[timestamps,t_idx] = inRange(timestamps,[min(nlg_TTL_timestamps)-1e3*lfp_playback_offset max(nlg_TTL_timestamps)+1e3*lfp_playback_offset]);
+lfpData.(lfpData_data_name) = lfpData.(lfpData_data_name)(:,t_idx);
+
+csc_playback_idx = zeros(1,n_used_playbacks);
 for call_k = 1:n_used_playbacks
-    
-    [~,csc_playback_idx] = min(abs(timestamps - nlg_TTL_timestamps(call_k))); 
-    
-    csc_idx = (csc_playback_idx-lfp_playback_offset_csc_samples):(csc_playback_idx+lfp_playback_offset_csc_samples);
-    playback_lfp_data = lfpData.lfpData(:,csc_idx);
-    
-    for ch = 1:n_channel
-        playback_csc(:,call_k,ch) = playback_lfp_data(ch,:);
-        playback_csc(:,call_k,ch) = filtfilt(notch_filter_60Hz,playback_csc(:,call_k,ch));
-        playback_csc(:,call_k,ch) = filtfilt(notch_filter_120Hz,playback_csc(:,call_k,ch));
+    [~,csc_playback_idx(call_k)] = min(abs(timestamps - nlg_TTL_timestamps(call_k))); 
+end
+
+playback_csc = zeros(n_lfp_samples,n_used_playbacks,n_channel);
+parfor ch = 1:n_channel
+    lfp_one_channel = lfpData.(lfpData_data_name)(ch,:);
+    lfp_one_channel = filtfilt(notch_filter_60Hz,lfp_one_channel);
+    lfp_one_channel = filtfilt(notch_filter_120Hz,lfp_one_channel);
+    for call_k = 1:n_used_playbacks
+        csc_idx = (csc_playback_idx(call_k)-lfp_playback_offset_csc_samples):(csc_playback_idx(call_k)+lfp_playback_offset_csc_samples);
+        playback_csc(:,call_k,ch) = lfp_one_channel(csc_idx);
     end
 end
-toc
+
 playback_csc_struct = struct('playback_csc',playback_csc,'filters',{filters},...
     'lfp_call_offset',lfp_playback_offset,'playback_TTL_durations',nlg_TTL_durations,...
     'playback_TTL_timestamps',nlg_TTL_timestamps);
 %%
-
-save(outDir,'-struct','playback_csc_struct')
-
+if exist('outDir','var')
+    save(outDir,'-struct','playback_csc_struct')
+else
+    save(lfp_file_name,'-append','playback_csc_struct')
+end
 
 end
