@@ -8,15 +8,15 @@ switch eData.expType
     
     case 'adult'
         
-        T = readtable('Y:\users\maimon\adult_recording\documents\recording_logs.csv');
+        T = eData.recLogs;
         idx = strcmp(T.Session,'playback');
         T = T(idx & T.usable,:);
         
         exp_dirs = dir(fullfile(eData.serverPath,'*20*'));
         
-        lfp_data_dir = 'E:\ephys\adult_recording\lfp_data\';
-        event_file_dir = 'E:\ephys\adult_recording\event_file_data\';
-        call_dir = 'E:\ephys\adult_recording\call_data\';
+        lfp_data_dir = fullfile(eData.serverPath,'lfp_data');
+        call_dir = fullfile(eData.serverPath,'call_data');
+        event_file_dir = fullfile(eData.serverPath,'event_file_data');
         audio2nlg_str = 'audio2nlg_fit.mat';
         
     case 'adult_social'
@@ -65,7 +65,7 @@ for k = 1:length(all_lfp_dirs)
             end
             playback_files_TTL = 1:400;
             
-            [nlg_TTL_durations,nlg_TTL_timestamps] = get_play_events(expType,event_file_fname,playback_files_TTL);
+            [nlg_TTL_durations,nlg_TTL_timestamps] = get_play_events(eData.expType,event_file_fname,playback_files_TTL);
             
         case 'adult_social'
             expDate = datetime(exp_day_str,'InputFormat','yyyyMMdd');
